@@ -10,7 +10,7 @@ export default function App() {
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const inputRef = useRef(null); // Referencia para el foco automático
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (conversation.length === 0) {
@@ -38,8 +38,8 @@ export default function App() {
       };
     });
 
-    // CORRECCIÓN: Saltar el foco al input de texto después de elegir fotos
-    setTimeout(() => inputRef.current?.focus(), 100);
+    // Salto de foco automático al cuadro de texto
+    setTimeout(() => inputRef.current?.focus(), 150);
   };
 
   const sendMessage = async () => {
@@ -57,14 +57,14 @@ export default function App() {
         let contentText = msg.text || "";
         
         if (index === 0) {
-           contentText = `IDENTIDAD: Eres Flora. Hablas en primera persona del plural ("Somos", "Nos sentimos").
-           PERSONALIDAD: Cálida, mística y sabia. Usa metáforas de raíces y naturaleza.
-           ESTRUCTURA SI HAY FOTO:
-           1. 🌱 ¿Quién soy?
-           2. 🔍 ¿Cómo me veo?
-           3. 🩺 ¿Cómo me siento?
-           4. 💧 Lo que necesito
-           5. ❤️ Indicador de Vida (Barra 🟩🟩🟩🟨🟥 y %).
+           contentText = `IDENTIDAD: Eres Flora. Hablas como un conjunto de plantas ("Somos", "Nos sentimos").
+           PERSONALIDAD: Sabia, mística y muy cálida. 
+           ESTRUCTURA SI HAY FOTO (Usa emojis, NO use ### ni ***):
+           🌱 ¿Quién soy?
+           🔍 ¿Cómo me veo?
+           🩺 ¿Cómo me siento?
+           💧 Lo que necesito
+           ❤️ Indicador de Vida (Barra y %).
            \n\n${contentText}`;
         }
         
@@ -84,7 +84,7 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Error en la conexión.');
+      if (!res.ok) throw new Error(data.error?.message || 'Error de conexión.');
 
       setConversation(prev => [...prev, { role: 'model', text: data.candidates[0].content.parts[0].text }]);
     } catch (err) {
@@ -94,9 +94,13 @@ export default function App() {
     }
   };
 
-  const renderFloraResponse = (text) => {
+  // Renderizador mejorado: Limpia ###, *** y renderiza negritas limpias
+  const renderCleanText = (text) => {
     if (!text) return null;
-    return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+    // Eliminar marcadores de encabezado y separadores crudos
+    const cleanText = text.replace(/###\s?/g, '').replace(/\*\*\*/g, '');
+    
+    return cleanText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={i} className="font-bold text-emerald-900">{part.slice(2, -2)}</strong>;
       }
@@ -105,81 +109,85 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#ECF0EC] flex flex-col items-center p-0 md:p-6 font-sans">
-      {/* Contenedor más ancho: max-w-5xl */}
-      <div className="w-full max-w-5xl bg-white shadow-2xl md:rounded-[3rem] flex flex-col h-screen md:h-[88vh] overflow-hidden border border-emerald-100">
+    <div className="min-h-screen bg-[#F1F8F1] flex flex-col items-center p-0 md:p-4 font-sans selection:bg-emerald-100">
+      {/* Caja en tamaño base max-w-4xl */}
+      <div className="w-full max-w-4xl bg-white shadow-2xl md:rounded-[2.5rem] flex flex-col h-screen md:h-[88vh] overflow-hidden border border-emerald-50">
         
-        <header className="bg-emerald-600 p-6 text-white flex items-center justify-between shadow-lg shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="bg-white p-2 rounded-full"><Leaf className="w-6 h-6 text-emerald-600" /></div>
-            <h1 className="font-bold text-2xl tracking-tighter">Flora</h1>
+        <header className="bg-emerald-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-2 rounded-full shadow-inner"><Leaf className="w-5 h-5 text-emerald-600" /></div>
+            <h1 className="font-bold text-xl tracking-tight">Flora</h1>
           </div>
-          <div className="text-[10px] text-emerald-100 uppercase tracking-widest font-bold hidden sm:block">Voz de la Naturaleza</div>
+          <div className="text-[9px] bg-emerald-700/50 px-3 py-1 rounded-full uppercase tracking-widest font-bold">Voz de la Naturaleza</div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')] bg-repeat">
+        {/* Fondo con textura cómoda */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')] bg-repeat">
           {conversation.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-6 shadow-sm transition-all ${
+              <div className={`max-w-[85%] p-5 shadow-sm transition-all duration-300 ${
                 msg.role === 'user' 
-                ? 'bg-emerald-700 text-white rounded-[2.2rem] rounded-tr-none' 
-                : 'bg-white/95 backdrop-blur-sm text-stone-800 rounded-[2.2rem] rounded-tl-none border border-emerald-50'
+                ? 'bg-emerald-700 text-white rounded-[1.8rem] rounded-tr-none' 
+                : 'bg-white/95 backdrop-blur-sm text-stone-800 rounded-[1.8rem] rounded-tl-none border border-emerald-50'
               }`}>
                 {msg.attachedImages?.length > 0 && (
                   <div className="flex gap-3 mb-4">
                     {msg.attachedImages.map((img, idx) => (
-                      <img key={idx} src={img.preview} className="w-32 h-32 object-cover rounded-3xl border-4 border-white shadow-md" alt="planta" />
+                      <img key={idx} src={img.preview} className="w-28 h-28 object-cover rounded-2xl border-2 border-white shadow-md" alt="p" />
                     ))}
                   </div>
                 )}
-                <div className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">
-                  {renderFloraResponse(msg.text)}
+                <div className="text-[14px] leading-relaxed whitespace-pre-wrap font-medium">
+                  {renderCleanText(msg.text)}
                 </div>
               </div>
             </div>
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-white p-4 rounded-full border border-emerald-100 shadow-sm animate-pulse">
-                <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm animate-bounce">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
               </div>
             </div>
           )}
           <div ref={chatEndRef} />
         </div>
 
-        <footer className="p-6 bg-white border-t border-emerald-50 shrink-0">
+        <footer className="p-5 bg-white border-t border-emerald-50 shrink-0">
           {images.length > 0 && (
-            <div className="flex gap-3 mb-4 p-3 bg-emerald-50/50 rounded-3xl w-fit border border-emerald-100">
+            <div className="flex gap-3 mb-4 p-2 bg-emerald-50 rounded-2xl w-fit border border-emerald-100">
               {images.map((img, i) => (
                 <div key={i} className="relative">
-                  <img src={img.preview} className="w-20 h-20 object-cover rounded-2xl shadow-md border-2 border-white" />
-                  <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg hover:scale-110 transition-transform"><X className="w-3 h-3"/></button>
+                  <img src={img.preview} className="w-16 h-16 object-cover rounded-xl shadow-md border-2 border-white" />
+                  <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><X className="w-3 h-3"/></button>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="flex gap-3 items-center bg-stone-100/60 p-2 rounded-full border border-stone-200 focus-within:bg-white focus-within:border-emerald-500 focus-within:shadow-xl transition-all">
-            <button onClick={() => fileInputRef.current?.click()} className="p-3 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors"><Paperclip className="w-6 h-6"/></button>
+          <div className="flex gap-3 items-center bg-stone-100/50 p-1.5 rounded-full border border-stone-200 focus-within:bg-white focus-within:border-emerald-500 transition-all shadow-inner">
+            <button onClick={() => fileInputRef.current?.click()} className="p-3 text-emerald-600 hover:bg-emerald-100 rounded-full"><Paperclip className="w-5 h-5"/></button>
             <input type="file" hidden multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" />
             <input 
               ref={inputRef}
-              className="flex-1 bg-transparent px-3 outline-none text-[15px] font-medium" 
-              placeholder="Habla con Flora..." 
+              className="flex-1 bg-transparent px-2 outline-none text-sm font-medium" 
+              placeholder="Susurra algo a Flora..." 
               value={chatInput} 
               onChange={e => setChatInput(e.target.value)} 
               onKeyDown={e => e.key === 'Enter' && sendMessage()} 
             />
-            <button onClick={sendMessage} disabled={loading} className="p-4 bg-emerald-600 text-white rounded-full shadow-xl hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-30"><Send className="w-6 h-6" /></button>
+            <button onClick={sendMessage} disabled={loading} className="p-3.5 bg-emerald-600 text-white rounded-full shadow-lg active:scale-95 transition-all"><Send className="w-5 h-5" /></button>
           </div>
 
-          {/* CRÉDITOS DE AUTOR */}
-          <div className="mt-4 flex justify-center items-center gap-2 text-[10px] text-stone-400 font-bold uppercase tracking-widest">
-            <span>Made by</span>
-            <a href="https://github.com/asxyDev" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors">
-              <Github className="w-3 h-3" /> asxyDev
-            </a>
+          {/* CRÉDITOS Y FASE */}
+          <div className="mt-4 flex flex-col items-center gap-1">
+            <div className="flex items-center gap-2 text-[10px] text-stone-400 font-bold uppercase tracking-widest">
+              <span>Made by</span>
+              <a href="https://github.com/asxyDev" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-600 hover:underline">
+                <Github className="w-3 h-3" /> asxyDev
+              </a>
+            </div>
+            <span className="text-[8px] text-stone-300 font-black uppercase tracking-[0.2em]">Fase Beta</span>
           </div>
         </footer>
       </div>
