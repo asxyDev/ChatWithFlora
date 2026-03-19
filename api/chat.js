@@ -1,6 +1,4 @@
-// IMPORTANTE: Este archivo debe estar en la carpeta 'api' en la RAÍZ de tu proyecto.
-// No lo metas dentro de 'src'.
-
+// Ruta: /api/chat.js
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -9,15 +7,15 @@ export default async function handler(req, res) {
   const apiKey = process.env.VITE_GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: 'API Key no configurada en Vercel.' });
+    return res.status(500).json({ error: 'Falta la API Key en Vercel.' });
   }
 
   try {
     const { contents } = req.body;
 
-    // Usamos gemini-1.5-flash, que es el modelo más compatible actualmente.
+    // Usamos 'gemini-1.5-flash-latest' que es la versión con mayor compatibilidad
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
