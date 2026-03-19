@@ -1,3 +1,4 @@
+// Ruta: /api/chat.js
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'No permitido' });
 
@@ -6,9 +7,10 @@ export default async function handler(req, res) {
 
   try {
     const { contents } = req.body;
-    // Usamos el modelo más estándar para evitar el error de "Model not found"
+    
+    // CAMBIO A MODELO PRO
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
