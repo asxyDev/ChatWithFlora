@@ -1,16 +1,21 @@
-# React + Vite
+# 🌿 ChatWithFlora
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Flora** es una asistente botánica mística y sabia diseñada para conectar a las personas con sus plantas. A través de inteligencia artificial avanzada, Flora identifica especies, analiza su estado de salud y ofrece consejos de cuidado con una personalidad única y reconfortante.
 
-Currently, two official plugins are available:
+🚀 **[Prueba mi Demo](https://chat-with-flora.vercel.app)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Características
+- 🔍 **Identificación Instantánea:** Envía fotos de tus plantas y Flora reconocerá la especie.
+- 🩺 **Diagnóstico de Salud:** Visualización clara mediante una barra de energía (🟩🟩🟩🟨🟥).
+- 💬 **Personalidad Mística:** Flora no es un bot, es una entidad vegetal que habla con metáforas botánicas.
+- 📱 **Diseño Responsivo:** Optimizado para escritorio y dispositivos móviles.
+- 🛡️ **Seguridad:** Arquitectura con backend (Serverless Functions) para proteger las llaves de API.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Tecnologías
+- **Frontend:** React + Vite
+- **Estilos:** Tailwind CSS
+- **Iconos:** Lucide React
+- **IA:** Google Gemini 2.5 Pro (v1beta API)
+- **Deployment:** Vercel

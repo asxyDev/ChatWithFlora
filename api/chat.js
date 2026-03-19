@@ -6,8 +6,7 @@ export default async function handler(req, res) {
 
   try {
     const { contents } = req.body;
-    
-    // Usando Gemini 2.5 Pro como solicitaste
+    //GEM_PRO_2.5
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
       {
