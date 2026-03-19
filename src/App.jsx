@@ -1,4 +1,3 @@
-// Ruta: /src/App.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { Leaf, AlertCircle, Loader2, X, Send, Paperclip } from 'lucide-react';
 
@@ -69,29 +68,29 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F4F0] flex flex-col items-center p-0 md:p-4">
-      <div className="w-full max-w-2xl bg-white shadow-2xl md:rounded-[2rem] flex flex-col h-screen md:h-[90vh] overflow-hidden">
-        <header className="bg-emerald-600 p-4 text-white flex items-center gap-3">
+    <div className="min-h-screen bg-[#f8faf8] flex flex-col items-center p-0 md:p-4">
+      <div className="w-full max-w-2xl bg-white shadow-2xl md:rounded-[2.5rem] flex flex-col h-screen md:h-[90vh] overflow-hidden border border-emerald-50">
+        <header className="bg-emerald-600 p-5 text-white flex items-center gap-4">
           <Leaf className="w-6 h-6" />
-          <h1 className="font-bold text-lg italic">Flora</h1>
+          <h1 className="font-bold text-xl tracking-tight">Flora</h1>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {conversation.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+              <div className={`max-w-[85%] p-4 rounded-3xl shadow-sm ${
                 msg.role === 'user' 
-                ? 'bg-emerald-600 text-white rounded-tr-none' 
-                : 'bg-stone-100 text-stone-800 rounded-tl-none border border-stone-200'
+                ? 'bg-emerald-700 text-white rounded-tr-none' 
+                : 'bg-emerald-50 text-emerald-900 rounded-tl-none border border-emerald-100'
               }`}>
                 {msg.attachedImages?.length > 0 && (
                   <div className="flex gap-2 mb-2">
                     {msg.attachedImages.map((img, idx) => (
-                      <img key={idx} src={img.preview} className="w-16 h-16 object-cover rounded-lg" />
+                      <img key={idx} src={img.preview} className="w-20 h-20 object-cover rounded-xl border border-white/20" />
                     ))}
                   </div>
                 )}
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">{msg.text}</p>
               </div>
             </div>
           ))}
@@ -99,19 +98,19 @@ export default function App() {
           <div ref={chatEndRef} />
         </div>
 
-        <footer className="p-4 bg-white border-t">
-          {error && <div className="text-red-500 text-xs mb-2 font-bold uppercase tracking-tighter">⚠️ {error}</div>}
-          <div className="flex gap-2 items-center bg-stone-50 p-2 rounded-full border border-stone-200">
-            <button onClick={() => fileInputRef.current.click()} className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors"><Paperclip /></button>
+        <footer className="p-4 bg-white border-t border-emerald-50">
+          {error && <div className="text-red-500 text-[10px] mb-3 p-2 bg-red-50 rounded-lg border border-red-100 font-bold">⚠️ {error}</div>}
+          <div className="flex gap-2 items-center bg-gray-100/50 p-2 rounded-full border border-gray-200">
+            <button onClick={() => fileInputRef.current.click()} className="p-2.5 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors"><Paperclip className="w-5 h-5"/></button>
             <input type="file" hidden multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" />
             <input 
-              className="flex-1 bg-transparent px-3 outline-none text-sm" 
+              className="flex-1 bg-transparent px-2 outline-none text-sm font-medium" 
               placeholder="Habla con Flora..." 
               value={chatInput} 
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
             />
-            <button onClick={sendMessage} className="p-2 bg-emerald-600 text-white rounded-full shadow-lg"><Send className="w-5 h-5" /></button>
+            <button onClick={sendMessage} className="p-3 bg-emerald-600 text-white rounded-full shadow-lg active:scale-95 transition-transform"><Send className="w-5 h-5" /></button>
           </div>
         </footer>
       </div>

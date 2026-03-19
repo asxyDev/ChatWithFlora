@@ -1,13 +1,12 @@
-// Ruta: /api/chat.js (EN LA RAÍZ)
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'No permitido' });
 
   const apiKey = process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Falta la API Key en Vercel.' });
+  if (!apiKey) return res.status(500).json({ error: 'Falta API Key en Vercel' });
 
   try {
     const { contents } = req.body;
-    // Usamos el nombre base que es el más compatible
+    // Usamos el modelo más estándar para evitar el error de "Model not found"
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
@@ -22,6 +21,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ error: 'Error de conexión con el bosque.' });
+    return res.status(500).json({ error: 'Error de conexión' });
   }
 }
