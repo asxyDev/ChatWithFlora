@@ -12,6 +12,7 @@ export default function App() {
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Mensaje de inicio
   useEffect(() => {
     if (conversation.length === 0) {
       setConversation([{ 
@@ -38,7 +39,7 @@ export default function App() {
       };
     });
 
-    // Salto de foco automático al cuadro de texto
+    // Devolver el foco al chat automáticamente
     setTimeout(() => inputRef.current?.focus(), 150);
   };
 
@@ -59,12 +60,12 @@ export default function App() {
         if (index === 0) {
            contentText = `IDENTIDAD: Eres Flora. Hablas como un conjunto de plantas ("Somos", "Nos sentimos").
            PERSONALIDAD: Sabia, mística y muy cálida. 
-           ESTRUCTURA SI HAY FOTO (Usa emojis, NO use ### ni ***):
+           ESTRUCTURA SI HAY FOTO (NO use ### ni ***):
            🌱 ¿Quién soy?
            🔍 ¿Cómo me veo?
            🩺 ¿Cómo me siento?
            💧 Lo que necesito
-           ❤️ Indicador de Vida (Barra y %).
+           ❤️ Indicador de Vida (Barra de emojis y %).
            \n\n${contentText}`;
         }
         
@@ -84,7 +85,7 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Error de conexión.');
+      if (!res.ok) throw new Error(data.error?.message || 'Error en la conexión.');
 
       setConversation(prev => [...prev, { role: 'model', text: data.candidates[0].content.parts[0].text }]);
     } catch (err) {
@@ -94,10 +95,10 @@ export default function App() {
     }
   };
 
-  // Renderizador mejorado: Limpia ###, *** y renderiza negritas limpias
+  // Renderizador limpio que elimina basura de Markdown
   const renderCleanText = (text) => {
     if (!text) return null;
-    // Eliminar marcadores de encabezado y separadores crudos
+    // Quitamos encabezados ### y separadores ***
     const cleanText = text.replace(/###\s?/g, '').replace(/\*\*\*/g, '');
     
     return cleanText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
@@ -110,7 +111,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F1F8F1] flex flex-col items-center p-0 md:p-4 font-sans selection:bg-emerald-100">
-      {/* Caja en tamaño base max-w-4xl */}
       <div className="w-full max-w-4xl bg-white shadow-2xl md:rounded-[2.5rem] flex flex-col h-screen md:h-[88vh] overflow-hidden border border-emerald-50">
         
         <header className="bg-emerald-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
@@ -121,7 +121,7 @@ export default function App() {
           <div className="text-[9px] bg-emerald-700/50 px-3 py-1 rounded-full uppercase tracking-widest font-bold">Voz de la Naturaleza</div>
         </header>
 
-        {/* Fondo con textura cómoda */}
+        {/* Fondo con textura botánica cómoda */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')] bg-repeat">
           {conversation.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -145,7 +145,7 @@ export default function App() {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm animate-bounce">
+              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm">
                 <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
               </div>
             </div>
@@ -157,7 +157,7 @@ export default function App() {
           {images.length > 0 && (
             <div className="flex gap-3 mb-4 p-2 bg-emerald-50 rounded-2xl w-fit border border-emerald-100">
               {images.map((img, i) => (
-                <div key={i} className="relative">
+                <div key={i} className="relative group">
                   <img src={img.preview} className="w-16 h-16 object-cover rounded-xl shadow-md border-2 border-white" />
                   <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><X className="w-3 h-3"/></button>
                 </div>
@@ -179,7 +179,6 @@ export default function App() {
             <button onClick={sendMessage} disabled={loading} className="p-3.5 bg-emerald-600 text-white rounded-full shadow-lg active:scale-95 transition-all"><Send className="w-5 h-5" /></button>
           </div>
 
-          {/* CRÉDITOS Y FASE */}
           <div className="mt-4 flex flex-col items-center gap-1">
             <div className="flex items-center gap-2 text-[10px] text-stone-400 font-bold uppercase tracking-widest">
               <span>Made by</span>
