@@ -1,14 +1,13 @@
-// Ruta: /api/chat.js
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'No permitido' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
   const apiKey = process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Falta API Key en Vercel' });
+  if (!apiKey) return res.status(500).json({ error: 'API Key no configurada.' });
 
   try {
     const { contents } = req.body;
     
-    // CAMBIO A MODELO PRO
+    // Usando Gemini 2.5 Pro como solicitaste
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
       {
@@ -23,6 +22,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ error: 'Error de conexión' });
+    return res.status(500).json({ error: 'Error de conexión con el motor botánico.' });
   }
 }
