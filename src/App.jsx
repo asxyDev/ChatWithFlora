@@ -25,44 +25,29 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation, loading]);
 
-  // FUNCIÓN PARA OPTIMIZAR IMÁGENES (Evita Timeouts)
+  // OPTIMIZACIÓN: Reduce el peso de las fotos antes de mandarlas (Ahorra dinero)
   const optimizeImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = (event) => {
+      reader.onload = (e) => {
         const img = new Image();
-        img.src = event.target.result;
+        img.src = e.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1000; // Reducimos a 1000px max
+          const MAX_WIDTH = 1000; 
           let width = img.width;
           let height = img.height;
-
           if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
           } else {
-            if (height > MAX_WIDTH) {
-              width *= MAX_WIDTH / height;
-              height = MAX_WIDTH;
-            }
+            if (height > MAX_WIDTH) { width *= MAX_WIDTH / height; height = MAX_WIDTH; }
           }
-
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          
-          // Calidad 0.7 es perfecta para IA y muy ligera
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          resolve({
-            preview: URL.createObjectURL(file),
-            base64: dataUrl.split(',')[1],
-            mimeType: 'image/jpeg'
-          });
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+          resolve({ preview: URL.createObjectURL(file), base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
         };
       };
     });
@@ -72,64 +57,36 @@ export default function App() {
     const files = Array.from(e.target.files);
     if (images.length + files.length > 3) return setError('Máximo 3 fotos.');
     setError('');
-    setLoading(true); // Bloqueamos un poco mientras procesa la imagen localmente
-
+    setLoading(true);
     for (let file of files) {
       const optimized = await optimizeImage(file);
       setImages(prev => [...prev, optimized]);
     }
-
     setLoading(false);
-    e.target.value = null; // LIMPIEZA: permite subir la misma foto después
+    e.target.value = null; // Permite subir la misma foto después
     setTimeout(() => inputRef.current?.focus(), 150);
   };
 
   const sendMessage = async () => {
     if (!chatInput.trim() && images.length === 0) return;
     setLoading(true); setError('');
-    
     const newUserMsg = { role: 'user', text: chatInput, attachedImages: [...images] };
     const fullHistory = [...conversation, newUserMsg];
     setConversation(fullHistory);
     setChatInput(''); setImages([]);
 
     try {
-      const apiContents = fullHistory.map((msg, index) => {
-        const parts = [];
-        let contentText = msg.text || "";
-        
-        if (index === 0) {
-           contentText = `IDENTIDAD: Eres Flora. Hablas como un conjunto de plantas ("Somos", "Nos sentimos").
-           ESTRUCTURA SI HAY FOTO:
-           🌱 ¿Quién soy?
-           🔍 ¿Cómo me veo?
-           🩺 ¿Cómo me siento?
-           💧 Lo que necesito
-           ❤️ Indicador de Vida.
-           \n\n${contentText}`;
-        }
-        
-        parts.push({ text: contentText });
-        if (msg.attachedImages) {
-          msg.attachedImages.forEach(img => {
-            parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
-          });
-        }
-        return { role: msg.role === 'model' ? 'model' : 'user', parts };
-      });
-
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: apiContents })
+        body: JSON.stringify({ contents: fullHistory.map(m => ({
+          role: m.role,
+          parts: [{ text: m.text }, ...(m.attachedImages || []).map(i => ({ inlineData: { mimeType: i.mimeType, data: i.base64 } }))]
+        }))})
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 504) throw new Error("La foto es muy pesada o el servidor tardó mucho. Intenta con una foto más sencilla.");
-        throw new Error(data.error?.message || 'Error de conexión.');
-      }
-
+      if (!res.ok) throw new Error(data.error?.message || 'Error de conexión.');
       setConversation(prev => [...prev, { role: 'model', text: data.candidates[0].content.parts[0].text }]);
     } catch (err) {
       setError(err.message);
@@ -156,9 +113,9 @@ export default function App() {
         <header className="bg-emerald-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-white p-2 rounded-full shadow-inner"><Leaf className="w-5 h-5 text-emerald-600" /></div>
-            <h1 className="font-bold text-xl tracking-tight text-white">Flora</h1>
+            <h1 className="font-bold text-xl tracking-tight">Flora</h1>
           </div>
-          <div className="text-[9px] bg-emerald-700/50 px-3 py-1 rounded-full uppercase tracking-widest font-bold">Voz de la Naturaleza</div>
+          <div className="text-[9px] bg-emerald-700/50 px-3 py-1 rounded-full uppercase tracking-widest font-bold">Claude AI Enabled</div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')] bg-repeat">
@@ -184,7 +141,7 @@ export default function App() {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm">
+              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm animate-pulse">
                 <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
               </div>
             </div>
@@ -196,7 +153,7 @@ export default function App() {
           {images.length > 0 && (
             <div className="flex gap-3 mb-4 p-2 bg-emerald-50 rounded-2xl w-fit border border-emerald-100">
               {images.map((img, i) => (
-                <div key={i} className="relative group">
+                <div key={i} className="relative">
                   <img src={img.preview} className="w-16 h-16 object-cover rounded-xl shadow-md border-2 border-white" />
                   <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><X className="w-3 h-3"/></button>
                 </div>
