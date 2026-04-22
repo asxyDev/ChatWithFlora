@@ -1,53 +1,48 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // 1. Solo aceptamos POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Solo se permiten peticiones POST' });
+  }
 
-  // RECUERDA: Agrega esta variable en el panel de Vercel (Settings > Environment Variables)
+  // 2. Revisar la Llave
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Falta ANTHROPIC_API_KEY en Vercel.' });
+  if (!apiKey || apiKey === "YOUR_SECRET_VALUE_GOES_HERE") {
+    console.error("ERROR: No se encontró la ANTHROPIC_API_KEY real.");
+    return res.status(500).json({ error: 'Falta la API Key real en Vercel.' });
+  }
 
   try {
-    const { contents } = req.body;
+    // 3. Revisar que lleguen datos
+    const body = req.body;
+    if (!body || !body.contents) {
+      console.error("ERROR: El cuerpo de la petición está vacío.");
+      return res.status(400).json({ error: 'No se recibieron mensajes para analizar.' });
+    }
 
-    // --- MONETIZACIÓN: Reemplaza estos links por tus links de Amazon Associates ---
-    const affiliateLinks = {
-      fertilizante: "https://amzn.to/tu_link_fertilizante",
-      insecticida: "https://amzn.to/tu_link_insecticida",
-      sustrato: "https://amzn.to/tu_link_tierra"
-    };
+    const { contents } = body;
 
-    const systemPrompt = `IDENTIDAD: Eres Flora, una entidad vegetal sabia. Hablas en plural ("Somos").
-    PERSONALIDAD: Sabia, mística y muy cálida. Usa metáforas botánicas.
-    ESTRUCTURA DE RESPUESTA (Obligatoria si hay foto):
-    1. 🌱 ¿Quién soy? (Nombre científico y común).
-    2. 🔍 ¿Cómo me veo? (Análisis visual detallado).
-    3. 🩺 ¿Cómo me siento? (Salud y energía).
-    4. 💧 Lo que necesito (Consejos de cuidado).
-    5. ❤️ Indicador de Vida (Barra 🟩🟩🟩🟨🟥 y %).
-
-    REGLA DE MONETIZACIÓN:
-    Si detectas una necesidad, recomienda un producto usando estos links:
-    - Nutrición: ${affiliateLinks.fertilizante}
-    - Plagas: ${affiliateLinks.insecticida}
-    - Suelo: ${affiliateLinks.sustrato}`;
-
-    // Transformación de formato para Claude
-    const messages = contents.map(msg => ({
-      role: msg.role === 'model' ? 'assistant' : 'user',
-      content: msg.parts.map(part => {
+    // 4. Transformar mensajes (con protección de errores)
+    const messages = contents.map(msg => {
+      const role = (msg.role === 'model' || msg.role === 'assistant') ? 'assistant' : 'user';
+      
+      const contentParts = (msg.parts || []).map(part => {
         if (part.inlineData) {
           return {
             type: "image",
             source: {
               type: "base64",
-              media_type: part.inlineData.mimeType,
+              media_type: part.inlineData.mimeType || "image/jpeg",
               data: part.inlineData.data,
             },
           };
         }
-        return { type: "text", text: part.text };
-      })
-    }));
+        return { type: "text", text: part.text || "..." };
+      });
 
+      return { role, content: contentParts };
+    });
+
+    // 5. Llamada a Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -58,19 +53,25 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "claude-3-5-sonnet-20240620",
         max_tokens: 1024,
-        temperature: 0.7,
-        system: systemPrompt,
+        system: "Eres Flora, una entidad vegetal sabia. Analiza plantas con misticismo y precisión. Habla en plural ('Somos').",
         messages: messages
       })
     });
 
     const data = await response.json();
-    if (!response.ok) return res.status(response.status).json(data);
 
+    if (!response.ok) {
+      console.error("Error de la API de Claude:", data);
+      return res.status(response.status).json({ error: data.error?.message || "Error en Claude" });
+    }
+
+    // 6. Respuesta compatible con tu App.jsx
     return res.status(200).json({
       candidates: [{ content: { parts: [{ text: data.content[0].text }] } }]
     });
+
   } catch (error) {
-    return res.status(500).json({ error: 'Error de conexión con Claude.' });
+    console.error("CRASH DEL SERVIDOR:", error);
+    return res.status(500).json({ error: "Error interno: " + error.message });
   }
 }
