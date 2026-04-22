@@ -1,30 +1,20 @@
 export default async function handler(req, res) {
-  // 1. Solo aceptamos POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Solo se permiten peticiones POST' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Solo se permiten peticiones POST' });
 
-  // 2. Revisar la Llave
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "YOUR_SECRET_VALUE_GOES_HERE") {
-    console.error("ERROR: No se encontró la ANTHROPIC_API_KEY real.");
     return res.status(500).json({ error: 'Falta la API Key real en Vercel.' });
   }
 
   try {
-    // 3. Revisar que lleguen datos
-    const body = req.body;
-    if (!body || !body.contents) {
-      console.error("ERROR: El cuerpo de la petición está vacío.");
-      return res.status(400).json({ error: 'No se recibieron mensajes para analizar.' });
+    if (!req.body || !req.body.contents) {
+      return res.status(400).json({ error: 'No se recibieron datos para analizar.' });
     }
 
-    const { contents } = body;
+    const { contents } = req.body;
 
-    // 4. Transformar mensajes (con protección de errores)
     const messages = contents.map(msg => {
       const role = (msg.role === 'model' || msg.role === 'assistant') ? 'assistant' : 'user';
-      
       const contentParts = (msg.parts || []).map(part => {
         if (part.inlineData) {
           return {
@@ -38,11 +28,9 @@ export default async function handler(req, res) {
         }
         return { type: "text", text: part.text || "..." };
       });
-
       return { role, content: contentParts };
     });
 
-    // 5. Llamada a Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -51,7 +39,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20240620",
+        model: "claude-3-haiku-20240307", // ¡El cambio clave: Modelo Haiku!
         max_tokens: 1024,
         system: "Eres Flora, una entidad vegetal sabia. Analiza plantas con misticismo y precisión. Habla en plural ('Somos').",
         messages: messages
@@ -61,11 +49,11 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Error de la API de Claude:", data);
-      return res.status(response.status).json({ error: data.error?.message || "Error en Claude" });
+      console.error("Error de Claude:", data);
+      // ¡Convertimos el error a 502 para saber que fue culpa de Anthropic y no tuya!
+      return res.status(502).json({ error: data.error?.message || "Error interno en los servidores de Claude" });
     }
 
-    // 6. Respuesta compatible con tu App.jsx
     return res.status(200).json({
       candidates: [{ content: { parts: [{ text: data.content[0].text }] } }]
     });
