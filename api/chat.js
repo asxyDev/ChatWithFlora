@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307", // ¡El cambio clave: Modelo Haiku!
+        model: "claude-haiku-4-5-20251001", // ¡El cambio clave: Modelo Haiku!
         max_tokens: 1024,
         system: "Eres Flora, una entidad vegetal sabia. Analiza plantas con misticismo y precisión. Habla en plural ('Somos').",
         messages: messages
