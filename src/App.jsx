@@ -1,190 +1,162 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Leaf, AlertCircle, Loader2, X, Send, Paperclip, Github } from 'lucide-react';
 
 export default function App() {
-  const [images, setImages] = useState([]); 
-  const [conversation, setConversation] = useState([]); 
   const [chatInput, setChatInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'assistant', content: '¡Bienvenido! Somos Flora. Sube una foto o descríbenos a tu planta para analizar sus hojas y raíces.' }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [plantaActiva, setPlantaActiva] = useState(null);
   const chatEndRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const inputRef = useRef(null);
 
+  // Auto-scroll del chat
   useEffect(() => {
-    if (conversation.length === 0) {
-      setConversation([{ 
-        role: 'model', 
-        text: '¡Hola! Somos las pequeñas que habitan en este rincón. Nos da mucha alegría que te acerques a preguntarnos cómo estamos. 🌱' 
-      }]);
-    }
-  }, []);
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation, loading]);
+  const enviarMensaje = async () => {
+    if (!chatInput.trim()) return;
 
-  // OPTIMIZACIÓN: Reduce el peso de las fotos antes de mandarlas (Ahorra dinero)
-  const optimizeImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1000; 
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-          } else {
-            if (height > MAX_WIDTH) { width *= MAX_WIDTH / height; height = MAX_WIDTH; }
-          }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
-          resolve({ preview: URL.createObjectURL(file), base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
-        };
-      };
-    });
-  };
-
-  const handleImageChange = async (e) => {
-    const files = Array.from(e.target.files);
-    if (images.length + files.length > 3) return setError('Máximo 3 fotos.');
-    setError('');
-    setLoading(true);
-    for (let file of files) {
-      const optimized = await optimizeImage(file);
-      setImages(prev => [...prev, optimized]);
-    }
-    setLoading(false);
-    e.target.value = null; // Permite subir la misma foto después
-    setTimeout(() => inputRef.current?.focus(), 150);
-  };
-
-  const sendMessage = async () => {
-    if (!chatInput.trim() && images.length === 0) return;
-    setLoading(true); setError('');
-    const newUserMsg = { role: 'user', text: chatInput, attachedImages: [...images] };
-    const fullHistory = [...conversation, newUserMsg];
-    setConversation(fullHistory);
-    setChatInput(''); setImages([]);
+    const userMsg = chatInput;
+    setChatInput('');
+    setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+    setIsLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      // 1. Llamamos a tu servidor en Vercel
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: fullHistory.map(m => ({
-          role: m.role,
-          parts: [{ text: m.text }, ...(m.attachedImages || []).map(i => ({ inlineData: { mimeType: i.mimeType, data: i.base64 } }))]
-        }))})
+        body: JSON.stringify({ message: userMsg })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Error de conexión.');
-      setConversation(prev => [...prev, { role: 'model', text: data.candidates[0].content.parts[0].text }]);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const data = await response.json();
+      let botText = data.text || "Hubo un error en nuestras raíces.";
 
-  const renderCleanText = (text) => {
-    if (!text) return null;
-    const cleanText = text.replace(/###\s?/g, '').replace(/\*\*\*/g, '');
-    return cleanText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-bold text-emerald-900">{part.slice(2, -2)}</strong>;
+      // 2. EL TRUCO DE MAGIA: Buscamos la cápsula oculta <floradata>
+      const regex = /<floradata>([\s\S]*?)<\/floradata>/;
+      const match = botText.match(regex);
+
+      if (match && match[1]) {
+        try {
+          // Extraemos el JSON y actualizamos el panel derecho
+          const datosPlanta = JSON.parse(match[1].trim());
+          setPlantaActiva(datosPlanta);
+          
+          // Borramos el JSON del texto para que el usuario solo lea el saludo místico
+          botText = botText.replace(regex, '').trim();
+        } catch (e) {
+          console.error("Error al leer los datos de Flora:", e);
+        }
       }
-      return part;
-    });
+
+      // 3. Mostramos la respuesta limpia en el chat
+      setChatHistory(prev => [...prev, { role: 'assistant', content: botText }]);
+
+    } catch (error) {
+      console.error(error);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Nuestras hojas están marchitas hoy (Error de conexión).' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F8F1] flex flex-col items-center p-0 md:p-4 font-sans selection:bg-emerald-100">
-      <div className="w-full max-w-4xl bg-white shadow-2xl md:rounded-[2.5rem] flex flex-col h-screen md:h-[88vh] overflow-hidden border border-emerald-50">
-        
-        <header className="bg-emerald-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="bg-white p-2 rounded-full shadow-inner"><Leaf className="w-5 h-5 text-emerald-600" /></div>
-            <h1 className="font-bold text-xl tracking-tight">Flora</h1>
-          </div>
-          <div className="text-[9px] bg-emerald-700/50 px-3 py-1 rounded-full uppercase tracking-widest font-bold">Claude AI Enabled</div>
-        </header>
+    <div className="flex h-screen w-full bg-[#f8f4e8] text-[#20352b] font-sans overflow-hidden">
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/leaf.png')] bg-repeat">
-          {conversation.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-5 shadow-sm transition-all duration-300 ${
-                msg.role === 'user' 
-                ? 'bg-emerald-700 text-white rounded-[1.8rem] rounded-tr-none' 
-                : 'bg-white/95 backdrop-blur-sm text-stone-800 rounded-[1.8rem] rounded-tl-none border border-emerald-50'
-              }`}>
-                {msg.attachedImages?.length > 0 && (
-                  <div className="flex gap-3 mb-4">
-                    {msg.attachedImages.map((img, idx) => (
-                      <img key={idx} src={img.preview} className="w-28 h-28 object-cover rounded-2xl border-2 border-white shadow-md" alt="p" />
-                    ))}
-                  </div>
-                )}
-                <div className="text-[14px] leading-relaxed whitespace-pre-wrap font-medium">
-                  {renderCleanText(msg.text)}
-                </div>
+      {/* 1. MENÚ LATERAL IZQUIERDO */}
+      <div className="w-1/4 max-w-[300px] bg-[#1a3d2f] text-[#f8f4e8] flex flex-col shadow-2xl z-20">
+        <div className="p-6 border-b border-[#2a6b4f]">
+          <h1 className="text-2xl font-bold text-[#c9a96e] flex items-center gap-2">🌿 Flora</h1>
+          <p className="text-sm opacity-80 mt-1 font-light">La susurradora de hojas</p>
+        </div>
+        <div className="flex-1 p-4"><p className="text-xs text-gray-400 mt-4 text-center">Tus jardines aparecerán aquí muy pronto.</p></div>
+      </div>
+
+      {/* 2. ÁREA CENTRAL (Chat) */}
+      <div className="flex-1 flex flex-col bg-gradient-to-br from-[#e8e0c9] to-[#f8f4e8] relative">
+        <div className="px-8 py-5 bg-white/60 backdrop-blur-md border-b border-[#e8e0c9] flex justify-between items-center z-10">
+          <h2 className="text-lg font-bold text-[#1a3d2f]">Consultorio Botánico</h2>
+          <span className="text-xs font-bold bg-[#1a3d2f] text-[#c9a96e] px-4 py-1 rounded-full shadow-inner">Conectado a Claude</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+          {chatHistory.map((msg, index) => (
+            <div key={index} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className="text-2xl mt-2">{msg.role === 'user' ? '👤' : '🌱'}</div>
+              <div className={`p-4 rounded-2xl shadow-md max-w-[80%] whitespace-pre-wrap ${msg.role === 'user' ? 'bg-[#2a6b4f] text-white rounded-tr-none' : 'bg-white text-[#20352b] border border-[#e8e0c9] rounded-tl-none'}`}>
+                {msg.content}
               </div>
             </div>
           ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white/80 p-3 rounded-full border border-emerald-100 shadow-sm animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-              </div>
-            </div>
-          )}
+          {isLoading && <p className="text-center text-sm font-bold text-[#2a6b4f] animate-pulse">Flora está analizando las raíces...</p>}
           <div ref={chatEndRef} />
         </div>
 
-        <footer className="p-5 bg-white border-t border-emerald-50 shrink-0">
-          {images.length > 0 && (
-            <div className="flex gap-3 mb-4 p-2 bg-emerald-50 rounded-2xl w-fit border border-emerald-100">
-              {images.map((img, i) => (
-                <div key={i} className="relative">
-                  <img src={img.preview} className="w-16 h-16 object-cover rounded-xl shadow-md border-2 border-white" />
-                  <button onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><X className="w-3 h-3"/></button>
+        <div className="p-6 bg-white/80 backdrop-blur-lg border-t border-[#e8e0c9]">
+          <div className="max-w-4xl mx-auto flex gap-3">
+            <input
+              type="text"
+              placeholder="Ej: Mi potus tiene las hojas amarillas y lacias..."
+              className="flex-1 p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2a6b4f]"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && enviarMensaje()}
+            />
+            <button 
+              onClick={enviarMensaje}
+              disabled={isLoading}
+              className="px-8 py-4 bg-[#2a6b4f] text-white rounded-xl hover:bg-[#1a3d2f] disabled:opacity-50 transition shadow-md font-bold"
+            >
+              Enviar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. PANEL DERECHO (Dashboard Dinámico) */}
+      <div className="w-1/4 max-w-[380px] bg-[#fdfbf5] border-l border-[#e8e0c9] shadow-2xl flex flex-col z-20">
+        <div className="p-6 border-b border-[#e8e0c9] bg-white">
+          <h2 className="text-lg font-bold text-[#1a3d2f]">🩺 Análisis en vivo</h2>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {!plantaActiva ? (
+            <div className="p-8 flex flex-col items-center justify-center text-center text-gray-400 h-full space-y-4">
+              <span className="text-5xl opacity-50">🥀</span>
+              <p className="text-sm px-4">El panel despertará cuando Flora diagnostique tu planta.</p>
+            </div>
+          ) : (
+            <div className="p-6 space-y-5 animate-fade-in pb-10">
+              
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-3 drop-shadow-md">🪴</div>
+                <h3 className="text-2xl font-bold text-[#1a3d2f]">{plantaActiva.nombre}</h3>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-[#e8e0c9] shadow-sm space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-gray-500 uppercase mb-2"><span>Salud</span><span className="text-[#1a3d2f]">{plantaActiva.salud}%</span></div>
+                  <div className="flex gap-1 h-2">{[1, 2, 3, 4, 5].map((s) => <div key={s} className={`flex-1 rounded-full ${s * 20 <= plantaActiva.salud ? 'bg-[#2a6b4f]' : 'bg-gray-200'}`}></div>)}</div>
                 </div>
-              ))}
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-gray-500 uppercase mb-2"><span>Agua</span><span className={plantaActiva.agua < 50 ? 'text-amber-500' : 'text-blue-500'}>{plantaActiva.agua}%</span></div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ${plantaActiva.agua < 50 ? 'bg-amber-400' : 'bg-blue-400'}`} style={{ width: `${plantaActiva.agua}%` }}></div></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white p-4 rounded-xl border border-[#e8e0c9] shadow-sm flex flex-col items-center"><span className="text-2xl mb-1">☀️</span><span className="text-[10px] text-gray-400 font-bold uppercase">Luz</span><span className="text-sm font-bold text-[#1a3d2f]">{plantaActiva.luz}</span></div>
+                <div className="bg-white p-4 rounded-xl border border-[#e8e0c9] shadow-sm flex flex-col items-center"><span className="text-2xl mb-1">🧪</span><span className="text-[10px] text-gray-400 font-bold uppercase">Nutrientes</span><span className="text-sm font-bold text-amber-600">{plantaActiva.nutrientes}</span></div>
+              </div>
+
+              <div className="bg-[#1a3d2f] text-white p-5 rounded-xl shadow-md"><h4 className="text-[#c9a96e] text-[10px] font-bold uppercase mb-2">Veredicto</h4><p className="text-sm font-light">{plantaActiva.diagnostico}</p></div>
+              <div className="bg-[#f0eade] border border-[#c9a96e] p-5 rounded-xl"><h4 className="text-[#1a3d2f] text-[10px] font-bold uppercase mb-2 flex items-center gap-1">💡 Sugerencia Inmediata</h4><p className="text-sm font-medium mb-3">{plantaActiva.sugerencia}</p></div>
+              <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm"><h4 className="text-gray-400 text-[10px] font-bold uppercase mb-1">Pro Tip</h4><p className="text-xs text-gray-600">{plantaActiva.proTip}</p></div>
+
             </div>
           )}
-
-          <div className="flex gap-3 items-center bg-stone-100/50 p-1.5 rounded-full border border-stone-200 focus-within:bg-white focus-within:border-emerald-500 transition-all shadow-inner">
-            <button onClick={() => fileInputRef.current?.click()} className="p-3 text-emerald-600 hover:bg-emerald-100 rounded-full"><Paperclip className="w-5 h-5"/></button>
-            <input type="file" hidden multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" />
-            <input 
-              ref={inputRef}
-              className="flex-1 bg-transparent px-2 outline-none text-sm font-medium" 
-              placeholder="Susurra algo a Flora..." 
-              value={chatInput} 
-              onChange={e => setChatInput(e.target.value)} 
-              onKeyDown={e => e.key === 'Enter' && sendMessage()} 
-            />
-            <button onClick={sendMessage} disabled={loading} className="p-3.5 bg-emerald-600 text-white rounded-full shadow-lg active:scale-95 transition-all"><Send className="w-5 h-5" /></button>
-          </div>
-
-          <div className="mt-4 flex flex-col items-center gap-1">
-            <div className="flex items-center gap-2 text-[10px] text-stone-400 font-bold uppercase tracking-widest">
-              <span>Made by</span>
-              <a href="https://github.com/asxyDev" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-600 hover:underline">
-                <Github className="w-3 h-3" /> asxyDev
-              </a>
-            </div>
-            <span className="text-[8px] text-stone-300 font-black uppercase tracking-[0.2em]">Fase Beta</span>
-          </div>
-        </footer>
+        </div>
       </div>
     </div>
   );
