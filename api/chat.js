@@ -7,30 +7,43 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!req.body || !req.body.contents) {
-      return res.status(400).json({ error: 'No se recibieron datos para analizar.' });
+    if (!req.body) {
+      return res.status(400).json({ error: 'El cuerpo de la petición está vacío.' });
     }
 
-    const { contents } = req.body;
+    let messages = [];
 
-    const messages = contents.map(msg => {
-      const role = (msg.role === 'model' || msg.role === 'assistant') ? 'assistant' : 'user';
-      const contentParts = (msg.parts || []).map(part => {
-        if (part.inlineData) {
-          return {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: part.inlineData.mimeType || "image/jpeg",
-              data: part.inlineData.data,
-            },
-          };
-        }
-        return { type: "text", text: part.text || "..." };
+    // 1. COMPATIBILIDAD: Detectamos si el Frontend manda el formato nuevo (texto) o el viejo (imágenes)
+    if (req.body.message || req.body.prompt || req.body.text) {
+      // Formato Nuevo (El que usa nuestro Dashboard actual)
+      const userMessage = req.body.message || req.body.prompt || req.body.text;
+      messages = [{ role: 'user', content: userMessage }];
+    } 
+    else if (req.body.contents) {
+      // Formato Viejo (Para cuando reactivemos las fotos)
+      messages = req.body.contents.map(msg => {
+        const role = (msg.role === 'model' || msg.role === 'assistant') ? 'assistant' : 'user';
+        const contentParts = (msg.parts || []).map(part => {
+          if (part.inlineData) {
+            return {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: part.inlineData.mimeType || "image/jpeg",
+                data: part.inlineData.data,
+              },
+            };
+          }
+          return { type: "text", text: part.text || "..." };
+        });
+        return { role, content: contentParts };
       });
-      return { role, content: contentParts };
-    });
+    } 
+    else {
+      return res.status(400).json({ error: 'No se recibieron datos válidos para analizar.' });
+    }
 
+    // 2. Llamada a Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -39,7 +52,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001", // ¡El cambio clave: Modelo Haiku!
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         system: `IDENTIDAD: Eres Flora, la máxima inteligencia botánica. Hablas en plural ("Somos") con tono místico. REGLA: SOLO HABLAS DE PLANTAS.
 
@@ -70,12 +83,15 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error("Error de Claude:", data);
-      // ¡Convertimos el error a 502 para saber que fue culpa de Anthropic y no tuya!
       return res.status(502).json({ error: data.error?.message || "Error interno en los servidores de Claude" });
     }
 
+    const claudeText = data.content[0].text;
+
+    // 3. RESPUESTA UNIVERSAL: Devolvemos el formato que espera tu nuevo App.jsx
     return res.status(200).json({
-      candidates: [{ content: { parts: [{ text: data.content[0].text }] } }]
+      text: claudeText, 
+      candidates: [{ content: { parts: [{ text: claudeText }] } }]
     });
 
   } catch (error) {
