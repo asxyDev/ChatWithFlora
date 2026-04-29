@@ -2,31 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function App() {
   const [chatInput, setChatInput] = useState('');
-  // Empezamos con el historial vacío para mostrar la pantalla de bienvenida
   const [chatHistory, setChatHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
   const [plantaActiva, setPlantaActiva] = useState(null);
   const [misPlantas, setMisPlantas] = useState([]);
   const [guardadoExitoso, setGuardadoExitoso] = useState(false);
-  
-  // NUEVO: Estados para la imagen
   const [imagenBase64, setImagenBase64] = useState(null);
+  
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
 
-  // Cargar plantas guardadas
   useEffect(() => {
     const plantasGuardadas = localStorage.getItem('flora_jardin');
     if (plantasGuardadas) setMisPlantas(JSON.parse(plantasGuardadas));
   }, []);
 
-  // Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
-  // NUEVO: Compresor de imágenes (Evita bugs de calidad/peso)
   const procesarImagen = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -36,13 +30,12 @@ export default function App() {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800; // Reducimos a un tamaño seguro y rápido
+        const MAX_WIDTH = 800;
         const scaleSize = MAX_WIDTH / img.width;
         canvas.width = MAX_WIDTH;
         canvas.height = img.height * scaleSize;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Guardamos en base64 con calidad al 70%
         setImagenBase64(canvas.toDataURL('image/jpeg', 0.7));
       };
     };
@@ -50,32 +43,18 @@ export default function App() {
 
   const enviarMensaje = async () => {
     if (!chatInput.trim() && !imagenBase64) return;
-    
     const userMsg = chatInput;
     const imgAdjunta = imagenBase64;
-    
     setChatInput('');
-    setImagenBase64(null); // Limpiamos la preview
-    
-    // Mostramos el mensaje (con foto si hay) en el chat
+    setImagenBase64(null);
     setChatHistory(prev => [...prev, { role: 'user', content: userMsg, img: imgAdjunta }]);
     setIsLoading(true);
     setGuardadoExitoso(false);
 
     try {
-      // Usamos el formato "bilingüe" que configuramos en tu backend
-      const payload = {
-        contents: [{ role: 'user', parts: [] }]
-      };
-
-      if (imgAdjunta) {
-        payload.contents[0].parts.push({
-          inlineData: { mimeType: 'image/jpeg', data: imgAdjunta.split(',')[1] }
-        });
-      }
-      if (userMsg) {
-        payload.contents[0].parts.push({ text: userMsg });
-      }
+      const payload = { contents: [{ role: 'user', parts: [] }] };
+      if (imgAdjunta) payload.contents[0].parts.push({ inlineData: { mimeType: 'image/jpeg', data: imgAdjunta.split(',')[1] } });
+      if (userMsg) payload.contents[0].parts.push({ text: userMsg });
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -86,17 +65,33 @@ export default function App() {
       const data = await response.json();
       let botText = data.text || "";
 
-      // Extractor Mágico de FloraData
-      const regex = /<floradata>([\s\S]*?)<\/floradata>/;
-      const match = botText.match(regex);
+      // --- 🚨 EL NUEVO CAZADOR DE DATOS Y LIMPIADOR 🚨 ---
+      
+      // 1. Buscamos el JSON de los datos, ya sea en <floradata> o en un bloque ```json
+      const regexFlora = /<floradata>([\s\S]*?)<\/floradata>/;
+      const regexJson = /```json\s*([\s\S]*?)\s*```/;
+      
+      let match = botText.match(regexFlora) || botText.match(regexJson);
 
       if (match && match[1]) {
         try {
-          let jsonLimpio = match[1].replace(/```json/g, '').replace(/```/g, '').trim();
+          const jsonLimpio = match[1].replace(/```json/g, '').replace(/```/g, '').trim();
           setPlantaActiva(JSON.parse(jsonLimpio));
-          botText = botText.replace(regex, '').trim();
-        } catch (e) { console.error("Error JSON:", e); }
+          // Borramos el bloque de datos original del texto
+          botText = botText.replace(match[0], '').trim();
+        } catch (e) { console.error("Error al leer JSON de Flora:", e); }
       }
+
+      // 2. LIMPIEZA EXTREMA DE RUIDO VISUAL
+      botText = botText.replace(/```[\s\S]*?```/g, ''); // Elimina cualquier bloque de código restante
+      botText = botText.replace(/###/g, ''); // Elimina hashtags grandes
+      botText = botText.replace(/##/g, ''); // Elimina hashtags medianos
+      botText = botText.replace(/#/g, ''); // Elimina hashtags pequeños
+      botText = botText.replace(/\*\*/g, ''); // Elimina asteriscos de negrita crudos
+      botText = botText.replace(/\{"text":\s*"/g, ''); // Por si Claude alucina formato JSON crudo
+      botText = botText.replace(/"\}/g, '');
+      botText = botText.trim();
+
       setChatHistory(prev => [...prev, { role: 'assistant', content: botText }]);
     } catch (error) {
       setChatHistory(prev => [...prev, { role: 'assistant', content: '🥀 Error de conexión. Intenta de nuevo.' }]);
@@ -114,7 +109,6 @@ export default function App() {
   };
 
   return (
-    /* NUEVO: h-[100dvh] arregla el bug del teclado en celulares iOS/Android */
     <div className="flex h-[100dvh] w-full bg-[#f8f4e8] text-[#20352b] font-sans overflow-hidden">
       
       {/* 1. SIDEBAR IZQUIERDO */}
@@ -133,10 +127,10 @@ export default function App() {
             </button>
           ))}
         </div>
-        {/* LINK A GITHUB */}
+        {/* LINK A GITHUB MEJORADO */}
         <div className="p-4 border-t border-[#2a6b4f] text-center">
-          <a href="https://github.com/TuUsuario" target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-[#c9a96e] transition flex items-center justify-center gap-2">
-            <span>💻</span> Creado por Alan
+          <a href="https://github.com/asxyDev" target="_blank" rel="noreferrer" className="text-xs text-[#c9a96e] hover:text-white transition font-semibold tracking-wider">
+            Made by asxyDev
           </a>
         </div>
       </div>
@@ -149,7 +143,6 @@ export default function App() {
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-          {/* PANTALLA DE INICIO (Empty State) */}
           {chatHistory.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center px-4 animate-fade-in">
               <div className="w-24 h-24 bg-[#1a3d2f] rounded-full flex items-center justify-center text-5xl shadow-xl mb-6">🌱</div>
@@ -166,12 +159,12 @@ export default function App() {
             </div>
           )}
 
-          {/* HISTORIAL DE CHAT */}
           {chatHistory.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`p-4 rounded-2xl shadow-sm max-w-[85%] md:max-w-[70%] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#1a3d2f] text-white rounded-tr-none' : 'bg-white text-gray-800 border border-[#e8e0c9] rounded-tl-none'}`}>
                 {msg.img && <img src={msg.img} alt="Planta adjunta" className="w-full max-w-[200px] rounded-xl mb-3 border border-gray-200" />}
-                <div dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') }} />
+                {/* Texto limpio renderizado normalmente, sin formateadores raros */}
+                <div className="whitespace-pre-wrap">{msg.content}</div>
               </div>
             </div>
           ))}
@@ -182,7 +175,6 @@ export default function App() {
         {/* INPUT DE CHAT Y SUBIDA DE IMAGEN */}
         <div className="p-4 bg-white border-t border-[#e8e0c9]">
           <div className="max-w-4xl mx-auto flex flex-col gap-2">
-            {/* Preview de imagen adjunta antes de enviar */}
             {imagenBase64 && (
               <div className="relative w-16 h-16 rounded-xl border-2 border-[#2a6b4f] overflow-hidden shadow-sm">
                 <img src={imagenBase64} alt="preview" className="w-full h-full object-cover" />
@@ -220,7 +212,6 @@ export default function App() {
           </div>
         ) : (
           <div className="p-6 space-y-6 pb-12 animate-fade-in">
-            {/* Cabecera Estética */}
             <div className="text-center relative">
                <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 ${plantaActiva.esGeneral ? 'bg-amber-100 text-amber-700' : 'bg-[#e8f3ee] text-[#2a6b4f]'}`}>
                 {plantaActiva.esGeneral ? '📚 Ficha Especie' : '🩺 Paciente'}
@@ -228,28 +219,27 @@ export default function App() {
               <h3 className="text-3xl font-black text-[#1a3d2f] leading-tight">{plantaActiva.nombre}</h3>
             </div>
 
-            {/* Píldoras de Estado (Nuevo Diseño en lugar de barras simples) */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex flex-col gap-1 relative overflow-hidden">
                 <span className="text-gray-400 text-[10px] font-bold uppercase z-10">{plantaActiva.esGeneral ? 'Dificultad' : 'Salud'}</span>
-                <span className={`text-2xl font-black z-10 ${plantaActiva.salud < 40 ? 'text-red-500' : 'text-[#1a3d2f]'}`}>{plantaActiva.salud}%</span>
-                <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-red-400 to-[#2a6b4f]" style={{ width: `${plantaActiva.salud}%` }}></div>
+                <span className={`text-2xl font-black z-10 ${plantaActiva.salud < 40 ? 'text-red-500' : 'text-[#1a3d2f]'}`}>{plantaActiva.salud || 0}%</span>
+                <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-red-400 to-[#2a6b4f]" style={{ width: `${plantaActiva.salud || 0}%` }}></div>
               </div>
               <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex flex-col gap-1 relative overflow-hidden">
                 <span className="text-gray-400 text-[10px] font-bold uppercase z-10">{plantaActiva.esGeneral ? 'Humedad' : 'Agua'}</span>
-                <span className="text-2xl font-black text-blue-500 z-10">{plantaActiva.agua}%</span>
-                <div className="absolute bottom-0 left-0 h-full bg-blue-50 opacity-50" style={{ width: `${plantaActiva.agua}%` }}></div>
+                <span className="text-2xl font-black text-blue-500 z-10">{plantaActiva.agua || 0}%</span>
+                <div className="absolute bottom-0 left-0 h-full bg-blue-50 opacity-50" style={{ width: `${plantaActiva.agua || 0}%` }}></div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-orange-50 p-3 rounded-2xl flex items-center gap-3">
                 <span className="text-2xl">☀️</span>
-                <div className="flex flex-col"><span className="text-[9px] text-orange-400 font-bold uppercase">Luz</span><span className="text-xs font-black text-orange-900">{plantaActiva.luz}</span></div>
+                <div className="flex flex-col"><span className="text-[9px] text-orange-400 font-bold uppercase">Luz</span><span className="text-xs font-black text-orange-900">{plantaActiva.luz || '-'}</span></div>
               </div>
               <div className="bg-emerald-50 p-3 rounded-2xl flex items-center gap-3">
                 <span className="text-2xl">🧪</span>
-                <div className="flex flex-col"><span className="text-[9px] text-emerald-500 font-bold uppercase">Abono</span><span className="text-xs font-black text-emerald-900">{plantaActiva.nutrientes}</span></div>
+                <div className="flex flex-col"><span className="text-[9px] text-emerald-500 font-bold uppercase">Abono</span><span className="text-xs font-black text-emerald-900">{plantaActiva.nutrientes || '-'}</span></div>
               </div>
             </div>
 
@@ -267,10 +257,9 @@ export default function App() {
               </button>
             )}
 
-            {/* Veredicto visualmente limpio */}
             <div className="border-l-4 border-[#2a6b4f] pl-4 py-1">
                <span className="font-black text-[#1a3d2f] block text-xs uppercase tracking-widest mb-1">Diagnóstico</span>
-               <p className="text-sm text-gray-600 leading-relaxed">{plantaActiva.diagnostico}</p>
+               <p className="text-sm text-gray-600 leading-relaxed">{plantaActiva.diagnostico || '-'}</p>
             </div>
           </div>
         )}
