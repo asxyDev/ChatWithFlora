@@ -2,56 +2,107 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function App() {
   const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState([
-    { role: 'assistant', content: '¡Bienvenido! Somos Flora. ¿Quieres analizar una planta o aprender sobre alguna especie hoy?' }
-  ]);
+  // Empezamos con el historial vacío para mostrar la pantalla de bienvenida
+  const [chatHistory, setChatHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  
   const [plantaActiva, setPlantaActiva] = useState(null);
   const [misPlantas, setMisPlantas] = useState([]);
   const [guardadoExitoso, setGuardadoExitoso] = useState(false);
+  
+  // NUEVO: Estados para la imagen
+  const [imagenBase64, setImagenBase64] = useState(null);
+  const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
 
+  // Cargar plantas guardadas
   useEffect(() => {
     const plantasGuardadas = localStorage.getItem('flora_jardin');
     if (plantasGuardadas) setMisPlantas(JSON.parse(plantasGuardadas));
   }, []);
 
+  // Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
+  // NUEVO: Compresor de imágenes (Evita bugs de calidad/peso)
+  const procesarImagen = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Reducimos a un tamaño seguro y rápido
+        const scaleSize = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Guardamos en base64 con calidad al 70%
+        setImagenBase64(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    };
+  };
+
   const enviarMensaje = async () => {
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() && !imagenBase64) return;
+    
     const userMsg = chatInput;
+    const imgAdjunta = imagenBase64;
+    
     setChatInput('');
-    setChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
+    setImagenBase64(null); // Limpiamos la preview
+    
+    // Mostramos el mensaje (con foto si hay) en el chat
+    setChatHistory(prev => [...prev, { role: 'user', content: userMsg, img: imgAdjunta }]);
     setIsLoading(true);
     setGuardadoExitoso(false);
 
     try {
+      // Usamos el formato "bilingüe" que configuramos en tu backend
+      const payload = {
+        contents: [{ role: 'user', parts: [] }]
+      };
+
+      if (imgAdjunta) {
+        payload.contents[0].parts.push({
+          inlineData: { mimeType: 'image/jpeg', data: imgAdjunta.split(',')[1] }
+        });
+      }
+      if (userMsg) {
+        payload.contents[0].parts.push({ text: userMsg });
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify(payload)
       });
+      
       const data = await response.json();
       let botText = data.text || "";
 
+      // Extractor Mágico de FloraData
       const regex = /<floradata>([\s\S]*?)<\/floradata>/;
       const match = botText.match(regex);
 
       if (match && match[1]) {
         try {
           let jsonLimpio = match[1].replace(/```json/g, '').replace(/```/g, '').trim();
-          const datos = JSON.parse(jsonLimpio);
-          setPlantaActiva(datos);
+          setPlantaActiva(JSON.parse(jsonLimpio));
           botText = botText.replace(regex, '').trim();
         } catch (e) { console.error("Error JSON:", e); }
       }
       setChatHistory(prev => [...prev, { role: 'assistant', content: botText }]);
     } catch (error) {
-      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Error de conexión con las raíces.' }]);
-    } finally { setIsLoading(false); }
+      setChatHistory(prev => [...prev, { role: 'assistant', content: '🥀 Error de conexión. Intenta de nuevo.' }]);
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const guardarEnJardin = () => {
@@ -63,120 +114,163 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#f8f4e8] text-[#20352b] font-sans overflow-hidden">
+    /* NUEVO: h-[100dvh] arregla el bug del teclado en celulares iOS/Android */
+    <div className="flex h-[100dvh] w-full bg-[#f8f4e8] text-[#20352b] font-sans overflow-hidden">
       
       {/* 1. SIDEBAR IZQUIERDO */}
-      <div className="w-1/4 max-w-[300px] bg-[#1a3d2f] text-[#f8f4e8] flex flex-col shadow-2xl z-20">
+      <div className="hidden md:flex w-1/4 max-w-[280px] bg-[#1a3d2f] text-[#f8f4e8] flex-col shadow-2xl z-20">
         <div className="p-6 border-b border-[#2a6b4f]">
           <h1 className="text-2xl font-bold text-[#c9a96e]">🌿 Flora</h1>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {misPlantas.map((p, i) => (
-            <button key={i} onClick={() => {setPlantaActiva(p); setGuardadoExitoso(true)}} className="w-full text-left p-3 rounded-xl bg-[#234f3d] border-l-4 border-[#c9a96e] flex items-center gap-3 shadow-md">
+            <button key={i} onClick={() => {setPlantaActiva(p); setGuardadoExitoso(true)}} className="w-full text-left p-3 rounded-2xl bg-[#234f3d] border-l-4 border-[#c9a96e] hover:bg-[#2a6b4f] transition flex items-center gap-3 shadow-md">
               <span className="text-xl">🪴</span>
-              <div><p className="font-bold text-sm text-white">{p.nombre}</p><p className="text-[10px] text-[#c9a96e] uppercase font-bold">{p.jardin}</p></div>
+              <div className="overflow-hidden">
+                <p className="font-bold text-sm text-white truncate">{p.nombre}</p>
+                <p className="text-[10px] text-[#c9a96e] uppercase font-bold truncate">{p.jardin}</p>
+              </div>
             </button>
           ))}
+        </div>
+        {/* LINK A GITHUB */}
+        <div className="p-4 border-t border-[#2a6b4f] text-center">
+          <a href="https://github.com/TuUsuario" target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-[#c9a96e] transition flex items-center justify-center gap-2">
+            <span>💻</span> Creado por Alan
+          </a>
         </div>
       </div>
 
       {/* 2. CHAT CENTRAL */}
-      <div className="flex-1 flex flex-col bg-gradient-to-br from-[#e8e0c9] to-[#f8f4e8]">
-        <div className="px-8 py-5 bg-white/60 border-b border-[#e8e0c9] flex justify-between items-center">
+      <div className="flex-1 flex flex-col bg-gradient-to-br from-[#e8e0c9] to-[#f8f4e8] relative">
+        <div className="px-6 py-4 bg-white/60 border-b border-[#e8e0c9] flex justify-between items-center z-10 backdrop-blur-md">
           <h2 className="font-bold">Consultorio Botánico</h2>
-          <span className="text-[10px] bg-[#1a3d2f] text-[#c9a96e] px-3 py-1 rounded-full font-bold">CLAUDE 4.5</span>
+          <span className="text-[10px] bg-[#1a3d2f] text-[#c9a96e] px-3 py-1 rounded-full font-bold shadow-sm">IA ACTIVA</span>
         </div>
-        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+        
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+          {/* PANTALLA DE INICIO (Empty State) */}
+          {chatHistory.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-center px-4 animate-fade-in">
+              <div className="w-24 h-24 bg-[#1a3d2f] rounded-full flex items-center justify-center text-5xl shadow-xl mb-6">🌱</div>
+              <h2 className="text-3xl font-bold text-[#1a3d2f] mb-3">Conoce a Flora</h2>
+              <p className="text-gray-600 max-w-md mx-auto mb-8">Tu experta botánica impulsada por Inteligencia Artificial. Diagnostica plagas, aprende de cuidados y crea tu jardín virtual.</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <button onClick={() => fileInputRef.current.click()} className="px-5 py-3 bg-white border border-[#c9a96e] text-[#1a3d2f] rounded-xl font-bold shadow-sm hover:bg-[#f0eade] transition flex items-center gap-2">
+                  📷 Diagnosticar Foto
+                </button>
+                <button onClick={() => setChatInput('¿Cómo cuido una Monstera?')} className="px-5 py-3 bg-[#1a3d2f] text-[#c9a96e] rounded-xl font-bold shadow-md hover:bg-[#234f3d] transition">
+                  🌿 Aprender de Especies
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* HISTORIAL DE CHAT */}
           {chatHistory.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-4 rounded-2xl shadow-sm max-w-[80%] ${msg.role === 'user' ? 'bg-[#2a6b4f] text-white' : 'bg-white border border-[#e8e0c9]'}`}>
-                {msg.content}
+              <div className={`p-4 rounded-2xl shadow-sm max-w-[85%] md:max-w-[70%] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#1a3d2f] text-white rounded-tr-none' : 'bg-white text-gray-800 border border-[#e8e0c9] rounded-tl-none'}`}>
+                {msg.img && <img src={msg.img} alt="Planta adjunta" className="w-full max-w-[200px] rounded-xl mb-3 border border-gray-200" />}
+                <div dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') }} />
               </div>
             </div>
           ))}
-          {isLoading && <div className="text-center animate-pulse text-[#2a6b4f] text-sm font-bold italic">Sintonizando frecuencias naturales...</div>}
+          {isLoading && <div className="text-[#2a6b4f] text-xs font-bold italic animate-pulse flex gap-2 items-center"><span className="text-xl">✨</span> Analizando raíces...</div>}
           <div ref={chatEndRef} />
         </div>
-        <div className="p-6 bg-white/80 border-t border-[#e8e0c9]">
-          <div className="max-w-4xl mx-auto flex gap-3">
-            <input type="text" placeholder="¿Qué planta quieres conocer hoy?" className="flex-1 p-4 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#2a6b4f]" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && enviarMensaje()} />
-            <button onClick={enviarMensaje} className="px-6 py-4 bg-[#2a6b4f] text-white rounded-xl font-bold hover:bg-[#1a3d2f] transition">Enviar</button>
+
+        {/* INPUT DE CHAT Y SUBIDA DE IMAGEN */}
+        <div className="p-4 bg-white border-t border-[#e8e0c9]">
+          <div className="max-w-4xl mx-auto flex flex-col gap-2">
+            {/* Preview de imagen adjunta antes de enviar */}
+            {imagenBase64 && (
+              <div className="relative w-16 h-16 rounded-xl border-2 border-[#2a6b4f] overflow-hidden shadow-sm">
+                <img src={imagenBase64} alt="preview" className="w-full h-full object-cover" />
+                <button onClick={() => setImagenBase64(null)} className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center text-xs rounded-bl-lg">x</button>
+              </div>
+            )}
+            
+            <div className="flex gap-2 items-end">
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={(e) => procesarImagen(e.target.files[0])} className="hidden" />
+              <button onClick={() => fileInputRef.current.click()} className="p-4 text-gray-400 hover:text-[#2a6b4f] bg-gray-50 rounded-2xl border border-gray-200 transition text-xl h-[56px] flex items-center justify-center">
+                📎
+              </button>
+              <textarea
+                placeholder="Escribe un mensaje..."
+                className="flex-1 p-4 rounded-2xl border border-gray-200 outline-none focus:border-[#2a6b4f] bg-gray-50 resize-none min-h-[56px] max-h-[120px]"
+                rows="1"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); } }}
+              />
+              <button onClick={enviarMensaje} disabled={isLoading || (!chatInput && !imagenBase64)} className="px-6 bg-[#2a6b4f] text-white rounded-2xl font-bold hover:bg-[#1a3d2f] disabled:opacity-50 transition h-[56px]">
+                Enviar
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 3. PANEL DERECHO DINÁMICO */}
-      <div className="w-1/4 max-w-[380px] bg-[#fdfbf5] border-l border-[#e8e0c9] shadow-2xl flex flex-col z-20 overflow-y-auto">
+      {/* 3. PANEL DERECHO (Diseño UI Mejorado) */}
+      <div className="hidden lg:flex w-1/4 max-w-[360px] bg-white border-l border-[#e8e0c9] shadow-2xl flex-col z-20 overflow-y-auto custom-scrollbar relative">
         {!plantaActiva ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center space-y-4 italic">
-            <span className="text-6xl">🌿</span>
-            <p className="text-sm">Menciona una especie o sube una foto para activar la Ficha Botánica.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center space-y-4">
+            <div className="w-32 h-32 bg-gray-50 border-2 border-dashed border-gray-200 rounded-full flex items-center justify-center text-5xl">🪴</div>
+            <p className="text-sm font-medium">El panel despertará cuando analices una planta.</p>
           </div>
         ) : (
-          <div className="p-6 space-y-5">
-            {/* Título adaptable */}
-            <div className="text-center border-b border-[#e8e0c9] pb-6">
-              <span className="text-[10px] font-bold text-[#c9a96e] uppercase tracking-widest">
-                {plantaActiva.esGeneral ? '📚 Ficha Botánica' : '🩺 Análisis de Salud'}
+          <div className="p-6 space-y-6 pb-12 animate-fade-in">
+            {/* Cabecera Estética */}
+            <div className="text-center relative">
+               <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 ${plantaActiva.esGeneral ? 'bg-amber-100 text-amber-700' : 'bg-[#e8f3ee] text-[#2a6b4f]'}`}>
+                {plantaActiva.esGeneral ? '📚 Ficha Especie' : '🩺 Paciente'}
               </span>
-              <h3 className="text-2xl font-bold text-[#1a3d2f] mt-1">{plantaActiva.nombre}</h3>
+              <h3 className="text-3xl font-black text-[#1a3d2f] leading-tight">{plantaActiva.nombre}</h3>
             </div>
 
-            {/* Barras con etiquetas adaptables */}
-            <div className="bg-white p-4 rounded-xl border border-[#e8e0c9] shadow-sm space-y-4">
-              <div>
-                <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase mb-2">
-                  <span>{plantaActiva.esGeneral ? 'Dificultad de Cuidado' : 'Salud General'}</span>
-                  <span className="text-[#1a3d2f]">{plantaActiva.salud}%</span>
-                </div>
-                <div className="flex gap-1 h-2">
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <div key={s} className={`flex-1 rounded-full ${s * 20 <= plantaActiva.salud ? (plantaActiva.esGeneral ? 'bg-amber-400' : 'bg-[#2a6b4f]') : 'bg-gray-100'}`}></div>
-                  ))}
-                </div>
+            {/* Píldoras de Estado (Nuevo Diseño en lugar de barras simples) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex flex-col gap-1 relative overflow-hidden">
+                <span className="text-gray-400 text-[10px] font-bold uppercase z-10">{plantaActiva.esGeneral ? 'Dificultad' : 'Salud'}</span>
+                <span className={`text-2xl font-black z-10 ${plantaActiva.salud < 40 ? 'text-red-500' : 'text-[#1a3d2f]'}`}>{plantaActiva.salud}%</span>
+                <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-red-400 to-[#2a6b4f]" style={{ width: `${plantaActiva.salud}%` }}></div>
               </div>
-              <div>
-                <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase mb-2">
-                  <span>{plantaActiva.esGeneral ? 'Humedad Ideal' : 'Nivel de Agua'}</span>
-                  <span className="text-blue-500">{plantaActiva.agua}%</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                  <div className="h-full bg-blue-400 rounded-full transition-all duration-1000" style={{ width: `${plantaActiva.agua}%` }}></div>
-                </div>
+              <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex flex-col gap-1 relative overflow-hidden">
+                <span className="text-gray-400 text-[10px] font-bold uppercase z-10">{plantaActiva.esGeneral ? 'Humedad' : 'Agua'}</span>
+                <span className="text-2xl font-black text-blue-500 z-10">{plantaActiva.agua}%</span>
+                <div className="absolute bottom-0 left-0 h-full bg-blue-50 opacity-50" style={{ width: `${plantaActiva.agua}%` }}></div>
               </div>
             </div>
 
-            {/* Sabías que... (Solo en modo general) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-orange-50 p-3 rounded-2xl flex items-center gap-3">
+                <span className="text-2xl">☀️</span>
+                <div className="flex flex-col"><span className="text-[9px] text-orange-400 font-bold uppercase">Luz</span><span className="text-xs font-black text-orange-900">{plantaActiva.luz}</span></div>
+              </div>
+              <div className="bg-emerald-50 p-3 rounded-2xl flex items-center gap-3">
+                <span className="text-2xl">🧪</span>
+                <div className="flex flex-col"><span className="text-[9px] text-emerald-500 font-bold uppercase">Abono</span><span className="text-xs font-black text-emerald-900">{plantaActiva.nutrientes}</span></div>
+              </div>
+            </div>
+
             {plantaActiva.curiosidad && (
-              <div className="bg-[#1a3d2f] text-white p-5 rounded-xl shadow-md relative overflow-hidden">
-                <span className="absolute -top-2 -right-2 text-6xl opacity-10 font-serif">?</span>
-                <h4 className="text-[#c9a96e] text-[10px] font-bold uppercase mb-2 tracking-widest">¿Sabías que...?</h4>
-                <p className="text-xs font-light leading-relaxed italic">"{plantaActiva.curiosidad}"</p>
+              <div className="bg-gradient-to-br from-[#1a3d2f] to-[#2a6b4f] text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                <span className="absolute -bottom-4 -right-2 text-8xl opacity-10 font-serif">?</span>
+                <h4 className="text-[#c9a96e] text-[10px] font-bold uppercase tracking-widest mb-2">Curiosidad</h4>
+                <p className="text-sm font-medium leading-relaxed">"{plantaActiva.curiosidad}"</p>
               </div>
             )}
 
-            {/* Info Técnica */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-[#e8e0c9] text-center shadow-sm">
-                <span className="text-xs text-gray-400 font-bold block uppercase mb-1">☀️ Luz</span>
-                <span className="font-bold text-[#1a3d2f] text-sm">{plantaActiva.luz}</span>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-[#e8e0c9] text-center shadow-sm">
-                <span className="text-xs text-gray-400 font-bold block uppercase mb-1">🧪 Abono</span>
-                <span className="font-bold text-amber-600 text-sm">{plantaActiva.nutrientes}</span>
-              </div>
-            </div>
-
-            {/* Botón de Guardado (Solo si no está guardada) */}
             {!plantaActiva.esGeneral && (
-              <button onClick={guardarEnJardin} disabled={guardadoExitoso} className={`w-full py-3 rounded-xl font-bold uppercase text-xs transition ${guardadoExitoso ? 'bg-gray-200 text-gray-400' : 'bg-[#c9a96e] text-[#1a3d2f]'}`}>
-                {guardadoExitoso ? '✓ Planta en tu Jardín' : '+ Guardar esta Planta'}
+              <button onClick={guardarEnJardin} disabled={guardadoExitoso} className={`w-full py-4 rounded-2xl font-black uppercase tracking-wider text-xs transition shadow-md ${guardadoExitoso ? 'bg-gray-100 text-gray-400' : 'bg-[#c9a96e] text-[#1a3d2f] hover:bg-[#b59862]'}`}>
+                {guardadoExitoso ? '✓ Guardado' : '+ Guardar Planta'}
               </button>
             )}
 
-            <div className="bg-white p-5 rounded-xl border border-[#e8e0c9] shadow-sm italic text-xs leading-relaxed text-gray-600">
-               <span className="font-bold text-[#1a3d2f] block not-italic mb-1 uppercase tracking-tighter">Resumen Botánico</span>
-               {plantaActiva.diagnostico}
+            {/* Veredicto visualmente limpio */}
+            <div className="border-l-4 border-[#2a6b4f] pl-4 py-1">
+               <span className="font-black text-[#1a3d2f] block text-xs uppercase tracking-widest mb-1">Diagnóstico</span>
+               <p className="text-sm text-gray-600 leading-relaxed">{plantaActiva.diagnostico}</p>
             </div>
           </div>
         )}

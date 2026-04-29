@@ -65,6 +65,7 @@ export default async function handler(req, res) {
         2. "salud": Si esGeneral es true, este valor representa la "Dificultad de Cuidado" (0 fácil - 100 difícil). Si es false, es la salud actual.
         3. "curiosidad": Un dato breve tipo "Sabías que..." sobre la planta.
 
+        REGLAS DE ESTILO (CRÍTICO): Eres concisa y visual. NUNCA escribas párrafos largos. Usa negritas para resaltar palabras clave. Usa listas o viñetas si das consejos. Agrega emojis para que la lectura sea ligera y amena. Responde siempre de forma corta y directa al grano.
         <floradata>
         {
           "nombre": "Nombre de la planta",
